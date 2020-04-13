@@ -35,9 +35,9 @@ class ConfController():
         """Queries the pointer device mode. Returns "asolute" or "relative" """
         retval = subprocess.Popen("xinput query-state %d"%(id), shell=True, stdout=subprocess.PIPE).stdout.read()
 
-        for line in retval.split("\n"):
-            if "mode=" in line.lower():
-                return line.lower().split("mode=")[1].split(" ")[0]
+        for line in retval.split(b"\n"):
+            if b"mode=" in line.lower():
+                return line.lower().split(b"mode=")[1].split(b" ")[0]
         return None
 
     def getPenTouchIds(self):
@@ -45,12 +45,13 @@ class ConfController():
         retval = subprocess.Popen("xinput list", shell=True, stdout=subprocess.PIPE).stdout.read()
 
         ids = {}
-        for line in retval.split("]"):
-            if "pointer" in line.lower() and "master" not in line.lower():
-                id = int(line.split("id=")[1].split("[")[0].strip())
-                name = line.split("id=")[0].split("\xb3",1)[1].strip()
-                if self.getPointerDeviceMode(id) == "absolute":
-                    ids[name+"(%d)"%id]={"id":id}
+        for line in retval.split(b"]"):
+            if b"pointer" in line.lower() and b"master" not in line.lower():
+                id = int(line.split(b"id=")[1].split(b"[")[0].strip())
+                name = line.split(b"id=")[0].split(b"\xb3",1)[1].strip()
+                if self.getPointerDeviceMode(id) == b"absolute":
+                    key = name+b"(%d)"%id
+                    ids[key.decode() if isinstance(key, bytes) else key] = {"id":id}
         return ids
 
     def getMonitorIds(self):
@@ -59,29 +60,29 @@ class ConfController():
 
         display0_dim = {"w":None,"h":None}
         monitors = {}
-        for line in retval.split("\n"):
-            if "Screen 0" == line[:8]:
+        for line in retval.split(b"\n"):
+            if b"Screen 0" == line[:8]:
                 # here the xrandr dev meant to call it display 0 in line with xorg.
-                for part in line.split(", "):
-                    if "current" in part:
-                        display0_dim["w"] = int(part.split("current")[1].split("x")[0])
-                        display0_dim["h"] = int(part.split("current")[1].split("x")[1])
-            elif "connected" in line and "disconnected" not in line:
-                port = line.split(" ")[0]
-                layout_strings = line.split("(")[0].strip().split(" ")
+                for part in line.split(b", "):
+                    if b"current" in part:
+                        display0_dim["w"] = int(part.split(b"current")[1].split(b"x")[0])
+                        display0_dim["h"] = int(part.split(b"current")[1].split(b"x")[1])
+            elif b"connected" in line and b"disconnected" not in line:
+                port = line.split(b" ")[0]
+                layout_strings = line.split(b"(")[0].strip().split(b" ")
                 for element in layout_strings:
-                    if re.match("^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$",element.strip()) is not None:
+                    if re.match(b"^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$",element.strip()) is not None:
                         placement = element
                 if layout_strings[-1].strip().lower() in ("right","left","inverted"):
                     rotation = layout_strings[-1].strip().lower()
                 else:
                     rotation = None
-                w = int( placement.split("x")[0] )
-                h = int( placement.split("x")[1].split("+")[0] )
-                x = int( placement.split("x")[1].split("+")[1] )
-                y = int( placement.split("x")[1].split("+")[2] )
+                w = int( placement.split(b"x")[0] )
+                h = int( placement.split(b"x")[1].split(b"+")[0] )
+                x = int( placement.split(b"x")[1].split(b"+")[1] )
+                y = int( placement.split(b"x")[1].split(b"+")[2] )
                 mon_name = port
-                monitors[mon_name]={"w":w, "h":h, "x":x, "y":y, "rotation":rotation}
+                monitors[mon_name.decode() if isinstance(mon_name, bytes) else mon_name]={"w":w, "h":h, "x":x, "y":y, "rotation":rotation}
         # add display to monitors
         monitors["display"]={"w":display0_dim["w"], "h":display0_dim["h"], "x":0, "y":0, "rotation":None}
 
@@ -100,11 +101,15 @@ class ConfController():
         return command
 
     def setDeviceAxesSwap(self, id, swap=False):
-        command = subprocess.Popen("xinput set-prop %d 'Evdev Axes Swap' %d" % (id, int(swap)), shell=True, stdout=subprocess.PIPE).stdout.read()
+        command = subprocess.Popen("xinput set-prop %d --type=int 'Evdev Axes Swap' %d" % (id, int(swap)), shell=True, stdout=subprocess.PIPE).stdout.read()
         return command
 
     def setDeviceAxisInversion(self, id, xinv=False, yinv=False):
-        command = subprocess.Popen("xinput set-prop %d 'Evdev Axis Inversion' %d %d" % (id, int(xinv), int(yinv)), shell=True, stdout=subprocess.PIPE).stdout.read()
+        command = subprocess.Popen("xinput set-prop %d --type=int 'Evdev Axis Inversion' %d %d" % (id, int(xinv), int(yinv)), shell=True, stdout=subprocess.PIPE).stdout.read()
+        return command
+
+    def setMapToOutput(self, id, monitor):
+        command = subprocess.Popen("xinput map-to-output %d %s" % (id, monitor), shell=True, stdout=subprocess.PIPE).stdout.read()
         return command
 
     def setDeviceAxisRotation(self, id, rotation=None):
@@ -140,7 +145,8 @@ class ConfController():
         ctm = CTMGenerator( dw, dh, mw, mh, mx, my)
         #self.resetDeviceCTM(penid)
         self.setDeviceCTM(penid, ctm)
-        self.setDeviceAxisRotation(penid,rot)
+        self.setDeviceAxisRotation(penid, rot)
+        #self.setMapToOutput(penid, monitor)
 
 def CTMGenerator( dw, dh, mw, mh, mx, my ):
     """generate coordinate transform matrix for a tablet controlling screen out of n_screens in a row"""

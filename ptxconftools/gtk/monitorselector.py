@@ -1,6 +1,9 @@
 #! /usr/bin/python
 
-import gtk
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk as gtk
+from gi.repository import Gdk
 import math
 
 class MonitorSelector(gtk.DrawingArea):
@@ -14,8 +17,9 @@ class MonitorSelector(gtk.DrawingArea):
         self.set_size_request(250, 150)
         self.set_mon_info(moninfo)
         self.active_mon = active_mon + ""
-        self.connect("expose-event", self.expose)
-        self.set_events(gtk.gdk.BUTTON_PRESS_MASK)
+        self.connect("draw", self.expose)
+#        self.set_events(gtk.gdk.BUTTON_PRESS_MASK)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
         self.connect('button-press-event', self.on_mouse_click)
 
     def set_mon_info(self,moninfo):
@@ -61,8 +65,8 @@ class MonitorSelector(gtk.DrawingArea):
         return "display"
 
     def _get_mon_rectangles(self):
-        w = self.allocation.width
-        h = self.allocation.height
+        w = self.get_allocated_width()
+        h = self.get_allocated_height()
         mons_tw, mons_th = self.monitor_space_px()
         margin = self.margin
 
@@ -100,8 +104,9 @@ class MonitorSelector(gtk.DrawingArea):
         mon_rectangles["display"] = (mx, my, mw, mh)
         return mon_rectangles
 
-    def expose(self, widget, event):
-        cr = widget.window.cairo_create()
+    def expose(self, widget, cr):
+        #cr = widget.window.cairo_create()
+        #cr = widget
         mon_rectangles = self._get_mon_rectangles()
         for mon in mon_rectangles:
             if mon == self.active_mon:
@@ -111,14 +116,14 @@ class MonitorSelector(gtk.DrawingArea):
             cr.set_line_width(self.line_width)
             x,y,w,h = mon_rectangles[mon]
             lw = self.line_width
-            if mon != "display":
+            if mon != b"display" and mon != "display":
                 # Note: inset rectangles inset by line width so they don't overlap
                 cr.rectangle(x+lw,y+lw,w-lw,h-lw)
                 cr.stroke()
                 cr.set_font_size(12)
-                tx, ty, tw, th, tdx, tdy = cr.text_extents(mon)
+                tx, ty, tw, th, tdx, tdy = cr.text_extents(str(mon))
                 cr.move_to(x+w/2-tw/2, y+h/2+th/2)
-                cr.show_text(mon)
+                cr.show_text(str(mon))
             else:
                 # draw total display/desktop with different line/no text
                 cr.set_line_width(self.line_width/2)
